@@ -1,0 +1,146 @@
+
+Poprawki:
+
+1) Program nie dzia³a
+
+Refaktor gdy kod nie dzia³a jest problematyczny. 
+Potrzebny jest nam punkt odniesienia by sprawdziæ czy po naszym refaktorze kod dalej dzia³a.
+Najlepiej by by³o napisaæ testy, ale tym razem zrobimy to na oko, jako ¿e interfejs klasy mo¿e siê zmieniæ.
+Poprawiamy:
+
+Z³a nazwa pliku / brak exception handling:
+    reader.ImportAndPrintData("data.csv"); - 
+
+Z³y warunek:
+    for (int i = 0; i <= importedLines.Count; i++)
+
+Brak sprawdzenia d³ugoœci value:
+    var values = importedLine.Split(';'); - 
+
+Pusta wartoœæ w inicjalizacji Listy:
+    ImportedObjects = new List<ImportedObject>() { new ImportedObject() };
+
+2) Problemy z odpowiedzialnoœci¹ klas/metod
+
+Metoda
+    public void ImportAndPrintData(string fileToImport, bool printData = true)
+
+zawiera w sobie s³owo "and" które sugeruje ¿e metoda ma dwie odpowiedzialnoœci. 
+Do tego dochodzi parametr bool, sugeruj¹cy kolejn¹ odpowiedzialnoœæ, jednak ten nie jest w ogóle u¿ywany.
+
+Dzielimy metodê na importuj¹c¹ i printuj¹c¹, usuwamy zbêdny parametr.
+
+Klasa DataReader sama w sobie ci¹gle ma za duzo odpowiedzialnoœci:
+ - Odpowiada za konwersjê danych tekstowych do kolekcji obiektów
+ - Reprezentuje t¹ kolekcjê obiektów
+ - Printuje t¹ kolekcjê
+
+ Z antysymetrii klas i danych wiemy ¿e:
+Dodanie nowych funkcjonalnoœci do struktury jest proste, kosztem trudnoœci dodawania nowych struktur.
+Dodawanie nowych klas jest proste, kosztem trudnoœci rozszerzania ich funkcjonalnoœci.
+W naszym przypadku mo¿emy za³o¿yæ wiêksz¹ szansê dodania nowych funkcjonalnoœci ni¿ zmiany struktury.
+
+U¿yjmy klasy DataReader do zwrócenia kolekcji obiektów z pliku.
+Niech sama kolekcja bêdzie osobnym tworem.
+Sam Datareader nie musi wiedzieæ jak printowaæ dane by pobraæ je z pliku.
+Niech DataPrinter bêdzie osobn¹ klas¹ - chc¹c zmieniæ sposób wyœwietlania zmienimy tylko t¹ klasê.
+Dziêki temu bêdziemy mogli rozszerzaæ mo¿liwoœci przetwarzania tych danych bez zmiany klasy DataReader.
+Teraz sprzê¿enie tych funkcjonalnoœci jest mniejsze, ale wci¹¿ mo¿e byæ doœæ du¿e.
+
+Mo¿emy nowe klasy przenieœæ do nowego folderu i nowego namespace.
+
+3) Problem ze strukturami - data classes
+
+ImportedObject to w zasadzie strukutra - zawiera tylko dane bez funkcjonalnoœci. 
+Niektórzy uwa¿aj¹ struktury w OOP jako code smell. Ja nie mam zdania jeszcze.
+To co wiem to to, ¿e ImportedObject mo¿e sam na sobie wykonaæ niektóre operacje,
+wiêc mo¿emy przenieœæ te funkcjonalnoœci do tej klasy.
+
+ImportedObject powtarza property "Name" z klasy bazowej, mo¿emy to wyrzuciæ.
+Do tego, Klasa bazowa ImportedObjectBaseClass raczej nie ma sensu, póki co scalam j¹ z drug¹.
+
+Property i zmienne publiczne w klasie ImportedObject s¹ zadeklarowane niekonsekwentnie, ujednolicamy do samych property.
+
+
+4) Problem z grupowaniem odpowiedzialnoœci komentarzami
+
+        // clear and correct imported data
+        foreach (var importedObject in ImportedObjects)
+        {
+
+Komentarze tego typu sugeruj¹ z³y podzia³ odpowiedzialnoœci.
+Ka¿dy taki komentarz mo¿emy zamieniæ na prywatn¹ metodê o podobnej nazwie co komentarz.
+Kod powinien byæ czytelny nawet bez komentarzy.
+
+
+5) D³ugoœæ linii i iloœæ zagnie¿d¿eñ
+
+Metoda printuj¹ca jest d³uga w poziomie. 
+Dzielimy ka¿dy foreach na osobn¹ metodê.
+ Mo¿naby te¿ pokusiæ siê o uogólnienie tych metod niezale¿nie od poziomu na którym jesteœmy ale to mo¿e wprowadziæ ba³agan,
+ gdy¿ te funkcje po podzieleniu bardziej s¹ poró¿nione ni¿ podobne, lepiej zostawiæ osobn¹ funkcjê dla ka¿dej iteracji póki co.
+ Mo¿emy za to wydzieliæ powtózenia z tych funkcji, np jak ju¿ zrobiliœmy dla warunków spokrewnienia obiektów.
+
+ Niektóre linie s¹ trochê za d³ugie, rozdzielamy takie instrukcje na wiêcej linii.
+
+
+ 6) Problem ze switchem
+
+Ciekawy case jest tutaj, niejawny switch:
+
+            importedObject.Type = values[0];
+            importedObject.Name = values[1];
+            importedObject.Schema = values[2];
+            importedObject.ParentName = values[3];
+            importedObject.ParentType = values[4];
+            importedObject.DataType = values[5];
+            importedObject.IsNullable = values[6];
+
+Dra¿ni w oczy fakt ¿e wymieniamy kolejne wartoœci zamiast iterowaæ po nich ale poniewa¿ przypisujemy je do struktury nie mo¿emy tak poprostu iterowaæ.
+W teoriii C# pozwala nam na iterowanie po properties ale nie chcemy byæ zale¿ni od kolejnoœci pól w klasie, ³atwo tu o b³êdy gdy ta kolejnoœæ siê zmieni.
+Moglibyœmy to zamieniæ na pêtlê + switch ale to nie polepszy czytelnoœci kodu, bo bêdziemy mieli switch który robi to samo i wygl¹da gorzej.
+To jawne przypisanie to najlepsze co mo¿emy zrobiæ w tej sytuacji.
+Podobny switch pojawia siê te¿ podczas procedury "clean and correct". Mo¿naby je po³¹czyæ, ale wynik móg³by byæ ma³o czytelny, póki co zostawiam jak jest.
+
+
+x) Powtórzenia, niejednolitoœæ, inne
+
+Nie musimy u¿ywaæ tu pêtli for, foreach jest krótsze.
+ for (int i = 0; i < importedLines.Count; i++)
+
+
+ Interfejs IEnumerable nic nam nie daje przy u¿yciu go jako pole, wybierzmy jak¹œ konkretn¹ kolekcjê.
+ Jedyne co dostajemy to dodatkowe rzutowanie.
+    ((List<ImportedObject>)ImportedObjects).Add(importedObject);
+
+
+Wielokrotnie w kodzie mamy sprawdzenie czy importedObject s¹ ze sob¹ spokrewnione.
+Mo¿emy te instrukcje warunkowe spi¹æ do osobnej metody.
+Do tego mamy zmienne impObj i importedObject, które nic nie mówi¹, zamieniamy je na child i parent.
+
+    if (impObj.ParentType == importedObject.Type)
+        {
+            if (impObj.ParentName == importedObject.Name)
+            {
+                importedObject.NumberOfChildren = 1 + importedObject.NumberOfChildren;
+            }
+        }
+
+Zamiast sumowania mo¿emy u¿yc operatora inkrementacji
+
+    parent.NumberOfChildren = 1 + parent.NumberOfChildren;
+
+Operacja poprawy danych wejœciowych jest podobna dla ka¿dego pola, mo¿emy t¹ funkcjonalnoœc przenieœæ do osobnej metody.
+
+    importedObject.Name = importedObject.Name.Trim().Replace(" ", "").Replace(Environment.NewLine, "");
+
+Streamreader nie jest zamkniêty po u¿yciu, u¿ywamy using.
+
+Mo¿naby u¿yyæ Linq do przetwarzania danych. Linq ma g³ównie u³atwiaæ czytelnoœæ ale nasze funkcje s¹ teraz dosyæ proste wiêc damy radê bez.
+
+Mo¿emy usun¹æ niepotrzebne importy.
+
+
+
+
+
